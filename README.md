@@ -2,7 +2,7 @@
 Scripts for managing gpg keyrings and performing common operations
 
 ## make-keyring.sh
-The `make-keyring.sh` script reads a list of GPG key short hex codes and creates a GPG keyring from them.
+The `make-keyring.sh` script reads a list of GPG key short hex codes and creates a GPG keyring from them. (If there is more than one tab-separated "column" in stdin, it'll only process the first "column".)
 If you have a TSV file with a column for short hex codes such as the following `keys.txt`:
 
 ```
