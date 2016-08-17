@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 import argparse
+import os
 import subprocess
 from collections import namedtuple
 
@@ -13,8 +14,8 @@ class GPGRuntimeError(Exception):
         self.returncode = returncode
         self.stderr = stderr
 
-    def __unicode__(self):
-        return 'returncode: {}\nmessage: {}'.format(self.returncode, self.message)
+    def __str__(self):
+        return 'returncode: {}\nmessage: {}'.format(self.returncode, self.stderr)
 
 
 class GPGRunner(object):
@@ -120,6 +121,30 @@ def run_show_command(gpg, email_domain):
 
 
 def run_make_command(gpg, keys):
+    if os.path.exists(gpg.keyring_name):
+        print 'File {} already exists.'.format(gpg.keyring_name)
+        print "Use 'gpgkeyring add' to add keys to an existing keyring."
+        exit(1)
+
+    print "Creating keyring {} with keys: {}".format(gpg.keyring_name, ' '.join(keys))
+    try:
+        gpg('--recv-keys', *keys)
+    except GPGRuntimeError as e:
+        # this error isn't actionable and doesn't prevent proper execution
+        # so we make the choice to swallow it
+        if e.returncode == 2 and 'gpg: public key of ultimately trusted key' in e.stderr:
+            pass
+        else:
+            raise
+
+
+def run_add_command(gpg, keys):
+    if not os.path.exists(gpg.keyring_name):
+        print 'File {} does not exist.'.format(gpg.keyring_name)
+        print "Use 'gpgkeyring make' to make a new keyring"
+        exit(1)
+
+    print "Adding to keyring {} keys: {}".format(gpg.keyring_name, ' '.join(keys))
     gpg('--recv-keys', *keys)
 
 
@@ -127,13 +152,17 @@ def run():
     parser = argparse.ArgumentParser()
     subparsers = parser.add_subparsers(help='command', dest='command')
 
-    parser_show = subparsers.add_parser('show', help='show the keyring contents')
-    parser_show.add_argument('keyring')
-    parser_show.add_argument('--email-domain', dest='email_domain')
+    subparser = subparsers.add_parser('show', help='show the keyring contents')
+    subparser.add_argument('keyring')
+    subparser.add_argument('--email-domain', dest='email_domain')
 
-    parser_make = subparsers.add_parser('make', help='make a new keyring from keys')
-    parser_make.add_argument('keyring')
-    parser_make.add_argument('keys', nargs='+')
+    subparser = subparsers.add_parser('make', help='make a new keyring from keys')
+    subparser.add_argument('keyring')
+    subparser.add_argument('keys', nargs='+')
+
+    subparser = subparsers.add_parser('add', help='add keys to keyring')
+    subparser.add_argument('keyring')
+    subparser.add_argument('keys', nargs='+')
 
     args = parser.parse_args()
 
@@ -145,8 +174,10 @@ def run():
     if args.command == 'show':
         run_show_command(gpg, email_domain=args.email_domain)
     elif args.command == 'make':
-        print "Creating keyring ${KEYRING_NAME} with keys:", ' '.join(args.keys)
         run_make_command(gpg, args.keys)
+    elif args.command == 'add':
+        run_add_command(gpg, args.keys)
+
 
 if __name__ == '__main__':
     run()
