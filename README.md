@@ -71,3 +71,20 @@ bash gpg-all.sh dimagi.gpg test-roundtrip < multi-message.txt
 ```
 
 to create a zipfile called test-roundtrip.zip that contained Ben.gpg, Biyeun.gpg, etc. with each secret encrypted for only the recipient's eyes.
+
+## gpgkeyring
+
+`gpgkeyring` is intended to be a single utility for viewing, editing, etc. keyrings conveniently.
+
+Currently the only command available is the `show` command to pretty print a keyring's contents.
+
+```bash
+./gpgkeyring show dimagi.gpg --email-domain dimagi.com
+Ben	xxxxx@dimagi.com	D71D7FAB
+Biyeun	xxxxx@dimagi.com	3FA94BE1
+Danny	xxxxx@dimagi.com	2D3E8469
+Ethan	xxxxx@dimagi.com	5E115245
+...
+```
+(It'll show the full name as shown in the identity entry for each key.)
+
