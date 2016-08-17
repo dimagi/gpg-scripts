@@ -119,6 +119,10 @@ def run_show_command(gpg, email_domain):
             )
 
 
+def run_make_command(gpg, keys):
+    gpg('--recv-keys', *keys)
+
+
 def run():
     parser = argparse.ArgumentParser()
     subparsers = parser.add_subparsers(help='command', dest='command')
@@ -126,6 +130,10 @@ def run():
     parser_show = subparsers.add_parser('show', help='show the keyring contents')
     parser_show.add_argument('keyring')
     parser_show.add_argument('--email-domain', dest='email_domain')
+
+    parser_make = subparsers.add_parser('make', help='make a new keyring from keys')
+    parser_make.add_argument('keyring')
+    parser_make.add_argument('keys', nargs='+')
 
     args = parser.parse_args()
 
@@ -136,6 +144,9 @@ def run():
 
     if args.command == 'show':
         run_show_command(gpg, email_domain=args.email_domain)
+    elif args.command == 'make':
+        print "Creating keyring ${KEYRING_NAME} with keys:", ' '.join(args.keys)
+        run_make_command(gpg, args.keys)
 
 if __name__ == '__main__':
     run()
