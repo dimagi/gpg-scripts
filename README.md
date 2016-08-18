@@ -1,6 +1,21 @@
 # gpg-scripts
 Scripts for managing gpg keyrings and performing common operations
 
+## Installation
+
+For now, the easiest way to install is straight from github.
+From your command line, `cd` to somewhere you won't mind keeping this git repository, and then run:
+
+```bash
+git clone https://github.com/dimagi/gpg-scripts.git
+cd gpg-scripts
+./install
+```
+and open a new login shell for the change to take effect.
+(This adds a line to your `~/.bash_profile` that puts `/path/to/gpg-scripts` on your `$PATH`.)
+
+You should then be able to run any of the following commands.
+
 ## gpgkeyring
 
 `gpgkeyring` is a utility for viewing, making, editing, etc. keyrings conveniently.
