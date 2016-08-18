@@ -1,0 +1,183 @@
+#!/usr/bin/env python
+
+import argparse
+import os
+import subprocess
+from collections import namedtuple
+
+KeyEntry = namedtuple('KeyEntry', ['hexcode', 'identities'])
+KeyIdentity = namedtuple('KeyIdentity', ['name', 'email'])
+
+
+class GPGRuntimeError(Exception):
+    def __init__(self, returncode, stderr):
+        self.returncode = returncode
+        self.stderr = stderr
+
+    def __str__(self):
+        return 'returncode: {}\nmessage: {}'.format(self.returncode, self.stderr)
+
+
+class GPGRunner(object):
+    def __init__(self, keyring_name=None):
+        self._keyring_name = keyring_name
+        if keyring_name is None:
+            self.keyring_name = None
+        else:
+            assert keyring_name  # should be truthy
+            self.keyring_name = self.normalize_keyring_name(keyring_name)
+
+    @staticmethod
+    def normalize_keyring_name(path):
+        if path.startswith('/') or path.startswith('../') or path.startswith('./'):
+            return path
+        else:
+            return './' + path
+
+    def __call__(self, *args):
+        if self.keyring_name is None:
+            cmd = ['gpg'] + list(args)
+        else:
+            cmd = ['gpg', '--keyring', self.keyring_name, '--no-default-keyring'] + list(args)
+
+        p = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                             stderr=subprocess.PIPE)
+        stdout, stderr = p.communicate()
+        if p.returncode == 0:
+            return stdout
+        else:
+            raise GPGRuntimeError(p.returncode, stderr)
+
+
+def get_gpg_key_entries(gpg):
+    return parse_list_keys(gpg('--with-colons', '--list-keys'))
+
+
+def parse_list_keys(stdout):
+    """
+    lines look like
+
+    pub:-:2048:1:XXXXXXXXXXXXXXXX:2016-06-15:::-:Meredith Yemail (http\x3a//www.dimagi.com/) <myemail@dimagi.com>::scESC:
+    uid:-::::2016-06-17::XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX::Meredith Yemail <myemail@gmail.com>:
+    
+    """
+    
+    def parse_hexcode(long_hex_code):
+        return long_hex_code[-8:]
+
+    def parse_identity(name_comment_email):
+        """
+        takes from the following formats:
+            'Meredith Yemail (Comment) <myemail@dimagi.com>'
+            'Meredith Yemail <myemail@dimagi.com>'
+        to
+            ('Meredith Yemail', 'myemail@dimagi.com')
+            
+        """
+        
+        if '(' in name_comment_email and ')' in name_comment_email:
+            name = name_comment_email.split('(')[0].strip()
+            email = name_comment_email.split(')')[-1].strip()[1:-1]
+        else:
+            name = name_comment_email.split('<')[0].strip()
+            email = name_comment_email.split('<')[-1][:-1]
+        return KeyIdentity(name, email)
+
+    table = (fields for fields in (line.split(':') for line in stdout.split('\n')))
+
+    key_entries = []
+
+    for fields in table:
+        if 'pub' == fields[0]:
+            _, _, _, _, long_hex_code, _, _, _, _, name_comment_email, _, _, _ = fields
+            key_entry = KeyEntry(
+                hexcode=parse_hexcode(long_hex_code),
+                identities=[parse_identity(name_comment_email)],
+            )
+            key_entries.append(key_entry)
+        elif 'uid' == fields[0]:
+            _, _, _, _, _, _, _, _, _, name_comment_email, _ = fields
+            key_entry = key_entries[-1]
+            key_entry.identities.append(parse_identity(name_comment_email))
+    return key_entries
+
+
+def run_show_command(gpg, email_domain):
+    for key_entry in get_gpg_key_entries(gpg):
+        if email_domain:
+            key_identities = [ki for ki in key_entry.identities
+                              if ki.email.split('@')[-1] == email_domain]
+        else:
+            key_identities = key_entry.identities
+
+        if key_identities:
+            for key_identity in key_identities:
+                print '{}\t{}\t{}'.format(key_identity.name, key_identity.email, key_entry.hexcode)
+        else:
+            raise AssertionError(
+                'None of the given emails match {!r}: {!r}'
+                .format(email_domain, key_entry.identities)
+            )
+
+
+def run_make_command(gpg, keys):
+    if os.path.exists(gpg.keyring_name):
+        print 'File {} already exists.'.format(gpg.keyring_name)
+        print "Use 'gpgkeyring add' to add keys to an existing keyring."
+        exit(1)
+
+    print "Creating keyring {} with keys: {}".format(gpg.keyring_name, ' '.join(keys))
+    try:
+        gpg('--recv-keys', *keys)
+    except GPGRuntimeError as e:
+        # this error isn't actionable and doesn't prevent proper execution
+        # so we make the choice to swallow it
+        if e.returncode == 2 and 'gpg: public key of ultimately trusted key' in e.stderr:
+            pass
+        else:
+            raise
+
+
+def run_add_command(gpg, keys):
+    if not os.path.exists(gpg.keyring_name):
+        print 'File {} does not exist.'.format(gpg.keyring_name)
+        print "Use 'gpgkeyring make' to make a new keyring"
+        exit(1)
+
+    print "Adding to keyring {} keys: {}".format(gpg.keyring_name, ' '.join(keys))
+    gpg('--recv-keys', *keys)
+
+
+def run():
+    parser = argparse.ArgumentParser()
+    subparsers = parser.add_subparsers(help='command', dest='command')
+
+    subparser = subparsers.add_parser('show', help='show the keyring contents')
+    subparser.add_argument('keyring')
+    subparser.add_argument('--email-domain', dest='email_domain')
+
+    subparser = subparsers.add_parser('make', help='make a new keyring from keys')
+    subparser.add_argument('keyring')
+    subparser.add_argument('keys', nargs='+')
+
+    subparser = subparsers.add_parser('add', help='add keys to keyring')
+    subparser.add_argument('keyring')
+    subparser.add_argument('keys', nargs='+')
+
+    args = parser.parse_args()
+
+    if args.keyring:
+        gpg = GPGRunner(args.keyring)
+    else:
+        gpg = GPGRunner()
+
+    if args.command == 'show':
+        run_show_command(gpg, email_domain=args.email_domain)
+    elif args.command == 'make':
+        run_make_command(gpg, args.keys)
+    elif args.command == 'add':
+        run_add_command(gpg, args.keys)
+
+
+if __name__ == '__main__':
+    run()
