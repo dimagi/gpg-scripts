@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-grep -E '(export )?PATH.*:/Users/droberts/gpg-scripts' ~/.bash_profile > /dev/null
+grep -E "(export )?PATH.*:.*/gpg-scripts" ~/.bash_profile > /dev/null
 if [ $? != 0 ]
 then
 	echo "# added by gpg-scripts on `date`
