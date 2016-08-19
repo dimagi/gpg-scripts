@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+
+grep -E "(export )?PATH.*:.*/gpg-scripts" ~/.bash_profile > /dev/null
+if [ $? != 0 ]
+then
+	echo "
+# added by gpg-scripts on `date`
+export PATH=\$PATH:`pwd`
+" >> ~/.bash_profile
+	echo "Install Successful"
+	echo "Open a new login shell for change to take effect."
+else
+	echo "Already Installed"
+fi
