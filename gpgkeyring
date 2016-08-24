@@ -5,7 +5,12 @@ import os
 import subprocess
 from collections import namedtuple
 
-KeyEntry = namedtuple('KeyEntry', ['hexcode', 'identities'])
+
+class KeyEntry(namedtuple('KeyEntry', ['fingerprint', 'identities'])):
+    def replace(self, fingerprint):
+        return self._replace(fingerprint=fingerprint)
+
+
 KeyIdentity = namedtuple('KeyIdentity', ['name', 'email'])
 
 
@@ -50,7 +55,7 @@ class GPGRunner(object):
 
 
 def get_gpg_key_entries(gpg):
-    return parse_list_keys(gpg('--with-colons', '--list-keys'))
+    return parse_list_keys(gpg('--with-colons', '--fingerprint'))
 
 
 def parse_list_keys(stdout):
@@ -59,11 +64,9 @@ def parse_list_keys(stdout):
 
     pub:-:2048:1:XXXXXXXXXXXXXXXX:2016-06-15:::-:Meredith Yemail (http\x3a//www.dimagi.com/) <myemail@dimagi.com>::scESC:
     uid:-::::2016-06-17::XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX::Meredith Yemail <myemail@gmail.com>:
+    fpr:::::::::XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX:
     
     """
-    
-    def parse_hexcode(long_hex_code):
-        return long_hex_code[-8:]
 
     def parse_identity(name_comment_email):
         """
@@ -91,14 +94,20 @@ def parse_list_keys(stdout):
         if 'pub' == fields[0]:
             _, _, _, _, long_hex_code, _, _, _, _, name_comment_email, _, _, _ = fields
             key_entry = KeyEntry(
-                hexcode=parse_hexcode(long_hex_code),
+                fingerprint=None,
                 identities=[parse_identity(name_comment_email)],
             )
             key_entries.append(key_entry)
+        elif 'fpr' == fields[0]:
+            'fpr:::::::::3A05A8DB7196143402FABFD9C84C2EBED71D7FAB:'
+            _, _, _, _, _, _, _, _, _, fingerprint, _ = fields
+            key_entry = key_entries[-1]
+            key_entries[-1] = key_entry.replace(fingerprint=fingerprint)
         elif 'uid' == fields[0]:
             _, _, _, _, _, _, _, _, _, name_comment_email, _ = fields
             key_entry = key_entries[-1]
             key_entry.identities.append(parse_identity(name_comment_email))
+
     return key_entries
 
 
@@ -112,7 +121,7 @@ def run_show_command(gpg, email_domain):
 
         if key_identities:
             for key_identity in key_identities:
-                print '{}\t{}\t{}'.format(key_identity.name, key_identity.email, key_entry.hexcode)
+                print '{}\t{}\t{}'.format(key_identity.name, key_identity.email, key_entry.fingerprint)
         else:
             raise AssertionError(
                 'None of the given emails match {!r}: {!r}'
