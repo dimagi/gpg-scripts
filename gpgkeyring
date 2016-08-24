@@ -12,6 +12,7 @@ class KeyEntry(namedtuple('KeyEntry', ['fingerprint', 'identities'])):
 
 
 KeyIdentity = namedtuple('KeyIdentity', ['name', 'email'])
+FlatKeyEntry = namedtuple('FlatKeyEntry', ['name', 'email', 'fingerprint'])
 
 
 class GPGRuntimeError(Exception):
@@ -112,21 +113,26 @@ def parse_list_keys(stdout):
 
 
 def run_show_command(gpg, email_domain):
-    for key_entry in get_gpg_key_entries(gpg):
-        if email_domain:
-            key_identities = [ki for ki in key_entry.identities
-                              if ki.email.split('@')[-1] == email_domain]
-        else:
-            key_identities = key_entry.identities
+    def get_flat_key_entries():
+        for key_entry in get_gpg_key_entries(gpg):
+            if email_domain:
+                key_identities = [ki for ki in key_entry.identities
+                                  if ki.email.split('@')[-1] == email_domain]
+            else:
+                key_identities = key_entry.identities
 
-        if key_identities:
-            for key_identity in key_identities:
-                print '{}\t{}\t{}'.format(key_identity.name, key_identity.email, key_entry.fingerprint)
-        else:
-            raise AssertionError(
-                'None of the given emails match {!r}: {!r}'
-                .format(email_domain, key_entry.identities)
-            )
+            if key_identities:
+                for key_identity in key_identities:
+                    yield FlatKeyEntry(
+                        key_identity.name, key_identity.email, key_entry.fingerprint)
+            else:
+                raise AssertionError(
+                    'None of the given emails match {!r}: {!r}'
+                    .format(email_domain, key_entry.identities)
+                )
+
+    for key in sorted(get_flat_key_entries(), key=lambda key_: key_.name.lower()):
+        print '{}\t{}\t{}'.format(key.name, key.email, key.fingerprint)
 
 
 def run_make_command(gpg, keys):
