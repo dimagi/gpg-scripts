@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 import argparse
 import os
@@ -15,10 +15,10 @@ class GPGRuntimeError(Exception):
         self.stderr = stderr
 
     def __str__(self):
-        return 'returncode: {}\nmessage: {}'.format(self.returncode, self.stderr)
+        return f'returncode: {self.returncode}\nmessage: {self.stderr}'
 
 
-class GPGRunner(object):
+class GPGRunner:
     def __init__(self, keyring_name=None):
         self._keyring_name = keyring_name
         if keyring_name is None:
@@ -44,16 +44,16 @@ class GPGRunner(object):
                              stderr=subprocess.PIPE)
         stdout, stderr = p.communicate()
         if p.returncode == 0:
-            return stdout
+            return stdout.decode('utf-8')
         else:
             raise GPGRuntimeError(p.returncode, stderr)
 
 
-def get_gpg_key_entries(gpg):
+def get_gpg_key_entries(gpg: GPGRunner) -> list[KeyEntry]:
     return parse_list_keys(gpg('--with-colons', '--list-keys'))
 
 
-def parse_list_keys(stdout):
+def parse_list_keys(stdout: str) -> list[KeyEntry]:
     """
     lines look like
 
@@ -112,21 +112,19 @@ def run_show_command(gpg, email_domain):
 
         if key_identities:
             for key_identity in key_identities:
-                print '{}\t{}\t{}'.format(key_identity.name, key_identity.email, key_entry.hexcode)
+                print(f'{key_identity.name}\t{key_identity.email}\t{key_entry.hexcode}')
         else:
-            raise AssertionError(
-                'None of the given emails match {!r}: {!r}'
-                .format(email_domain, key_entry.identities)
-            )
+            raise AssertionError('None of the given emails match '
+                                 f'{email_domain!r}: {key_entry.identities!r}')
 
 
 def run_make_command(gpg, keys):
     if os.path.exists(gpg.keyring_name):
-        print 'File {} already exists.'.format(gpg.keyring_name)
-        print "Use 'gpgkeyring add' to add keys to an existing keyring."
+        print(f'File {gpg.keyring_name} already exists.')
+        print("Use 'gpgkeyring add' to add keys to an existing keyring.")
         exit(1)
 
-    print "Creating keyring {} with keys: {}".format(gpg.keyring_name, ' '.join(keys))
+    print(f"Creating keyring {gpg.keyring_name} with keys: {' '.join(keys)}")
     try:
         gpg('--recv-keys', *keys)
     except GPGRuntimeError as e:
@@ -140,11 +138,11 @@ def run_make_command(gpg, keys):
 
 def run_add_command(gpg, keys):
     if not os.path.exists(gpg.keyring_name):
-        print 'File {} does not exist.'.format(gpg.keyring_name)
-        print "Use 'gpgkeyring make' to make a new keyring"
+        print(f'File {gpg.keyring_name} does not exist.')
+        print("Use 'gpgkeyring make' to make a new keyring")
         exit(1)
 
-    print "Adding to keyring {} keys: {}".format(gpg.keyring_name, ' '.join(keys))
+    print(f"Adding to keyring {gpg.keyring_name} keys: {' '.join(keys)}")
     gpg('--recv-keys', *keys)
 
 
