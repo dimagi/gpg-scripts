@@ -6,6 +6,8 @@ import subprocess
 import sys
 from collections import namedtuple
 
+KEYSERVER = 'pgp.mit.edu'
+
 KeyEntry = namedtuple('KeyEntry', ['hexcode', 'identities'])
 KeyIdentity = namedtuple('KeyIdentity', ['name', 'email'])
 
@@ -142,7 +144,7 @@ def run_add_command(gpg, keys):
         exit(1)
 
     print(f"Adding to keyring {gpg.keyring_name} keys: {' '.join(keys)}")
-    gpg('--recv-keys', *keys)
+    gpg('--keyserver', KEYSERVER, '--recv-keys', *keys)
 
 
 def run():
