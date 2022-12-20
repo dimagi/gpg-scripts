@@ -3,6 +3,7 @@
 import argparse
 import os
 import subprocess
+import sys
 from collections import namedtuple
 
 KeyEntry = namedtuple('KeyEntry', ['hexcode', 'identities'])
@@ -112,8 +113,8 @@ def run_show_command(gpg, email_domain):
             for key_identity in key_identities:
                 print(f'{key_identity.name}\t{key_identity.email}\t{key_entry.hexcode}')
         else:
-            raise AssertionError('None of the given emails match '
-                                 f'{email_domain!r}: {key_entry.identities!r}')
+            print(f'Warning: None of the given emails match {email_domain!r}: '
+                  f'{key_entry.identities!r}', file=sys.stderr)
 
 
 def run_make_command(gpg, keys):
