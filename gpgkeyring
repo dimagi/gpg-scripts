@@ -89,16 +89,14 @@ def parse_list_keys(stdout: str) -> list[KeyEntry]:
 
     for fields in table:
         if 'pub' == fields[0]:
-            _, _, _, _, long_hex_code, _, _, _, _, name_comment_email, _, _, _ = fields
             key_entry = KeyEntry(
-                hexcode=parse_hexcode(long_hex_code),
-                identities=[parse_identity(name_comment_email)],
+                hexcode=parse_hexcode(fields[4]),
+                identities=[parse_identity(fields[9])],
             )
             key_entries.append(key_entry)
         elif 'uid' == fields[0]:
-            _, _, _, _, _, _, _, _, _, name_comment_email, _ = fields
             key_entry = key_entries[-1]
-            key_entry.identities.append(parse_identity(name_comment_email))
+            key_entry.identities.append(parse_identity(fields[9]))
     return key_entries
 
 
