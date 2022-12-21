@@ -1,9 +1,12 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 import argparse
 import os
 import subprocess
+import sys
 from collections import namedtuple
+
+KEYSERVER = 'pgp.mit.edu'
 
 KeyEntry = namedtuple('KeyEntry', ['hexcode', 'identities'])
 KeyIdentity = namedtuple('KeyIdentity', ['name', 'email'])
@@ -15,10 +18,10 @@ class GPGRuntimeError(Exception):
         self.stderr = stderr
 
     def __str__(self):
-        return 'returncode: {}\nmessage: {}'.format(self.returncode, self.stderr)
+        return f'returncode: {self.returncode}\nmessage: {self.stderr}'
 
 
-class GPGRunner(object):
+class GPGRunner:
     def __init__(self, keyring_name=None):
         self._keyring_name = keyring_name
         if keyring_name is None:
@@ -44,16 +47,16 @@ class GPGRunner(object):
                              stderr=subprocess.PIPE)
         stdout, stderr = p.communicate()
         if p.returncode == 0:
-            return stdout
+            return stdout.decode('utf-8')
         else:
             raise GPGRuntimeError(p.returncode, stderr)
 
 
-def get_gpg_key_entries(gpg):
+def get_gpg_key_entries(gpg: GPGRunner) -> list[KeyEntry]:
     return parse_list_keys(gpg('--with-colons', '--list-keys'))
 
 
-def parse_list_keys(stdout):
+def parse_list_keys(stdout: str) -> list[KeyEntry]:
     """
     lines look like
 
@@ -89,16 +92,14 @@ def parse_list_keys(stdout):
 
     for fields in table:
         if 'pub' == fields[0]:
-            _, _, _, _, long_hex_code, _, _, _, _, name_comment_email, _, _, _ = fields
             key_entry = KeyEntry(
-                hexcode=parse_hexcode(long_hex_code),
-                identities=[parse_identity(name_comment_email)],
+                hexcode=parse_hexcode(fields[4]),
+                identities=[parse_identity(fields[9])],
             )
             key_entries.append(key_entry)
         elif 'uid' == fields[0]:
-            _, _, _, _, _, _, _, _, _, name_comment_email, _ = fields
             key_entry = key_entries[-1]
-            key_entry.identities.append(parse_identity(name_comment_email))
+            key_entry.identities.append(parse_identity(fields[9]))
     return key_entries
 
 
@@ -112,21 +113,19 @@ def run_show_command(gpg, email_domain):
 
         if key_identities:
             for key_identity in key_identities:
-                print '{}\t{}\t{}'.format(key_identity.name, key_identity.email, key_entry.hexcode)
+                print(f'{key_identity.name}\t{key_identity.email}\t{key_entry.hexcode}')
         else:
-            raise AssertionError(
-                'None of the given emails match {!r}: {!r}'
-                .format(email_domain, key_entry.identities)
-            )
+            print(f'Warning: None of the given emails match {email_domain!r}: '
+                  f'{key_entry.identities!r}', file=sys.stderr)
 
 
 def run_make_command(gpg, keys):
     if os.path.exists(gpg.keyring_name):
-        print 'File {} already exists.'.format(gpg.keyring_name)
-        print "Use 'gpgkeyring add' to add keys to an existing keyring."
+        print(f'File {gpg.keyring_name} already exists.')
+        print("Use 'gpgkeyring add' to add keys to an existing keyring.")
         exit(1)
 
-    print "Creating keyring {} with keys: {}".format(gpg.keyring_name, ' '.join(keys))
+    print(f"Creating keyring {gpg.keyring_name} with keys: {' '.join(keys)}")
     try:
         gpg('--recv-keys', *keys)
     except GPGRuntimeError as e:
@@ -140,12 +139,12 @@ def run_make_command(gpg, keys):
 
 def run_add_command(gpg, keys):
     if not os.path.exists(gpg.keyring_name):
-        print 'File {} does not exist.'.format(gpg.keyring_name)
-        print "Use 'gpgkeyring make' to make a new keyring"
+        print(f'File {gpg.keyring_name} does not exist.')
+        print("Use 'gpgkeyring make' to make a new keyring")
         exit(1)
 
-    print "Adding to keyring {} keys: {}".format(gpg.keyring_name, ' '.join(keys))
-    gpg('--recv-keys', *keys)
+    print(f"Adding to keyring {gpg.keyring_name} keys: {' '.join(keys)}")
+    gpg('--keyserver', KEYSERVER, '--recv-keys', *keys)
 
 
 def run():
